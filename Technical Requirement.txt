@@ -1,0 +1,23 @@
+| Technology             | Think of it as              | Main purpose                                                 |
+| ---------------------- | --------------------------- | ------------------------------------------------------------ |
+| **Next.js**            | Website framework           | Builds the web application                                   |
+| **React**              | UI building system          | Builds interactive interfaces                                |
+| **App Router**         | Page organizer              | Handles pages/routes in modern Next.js                       |
+| **Server Components**  | Server-side UI logic        | Runs appropriate components on the server                    |
+| **TypeScript**         | Safer JavaScript            | Prevents many coding/type errors                             |
+| **Tailwind CSS**       | Styling toolkit             | Makes the website look good                                  |
+| **Shadcn UI**          | UI component collection     | Buttons, forms, dialogs, tables, etc.                        |
+| **Lucide**             | Icon library                | Search, cart, user, settings icons                           |
+| **PostgreSQL**         | Database                    | Stores application data                                      |
+| **Supabase**           | Backend platform            | Hosts PostgreSQL and provides services such as Auth/Realtime |
+| **Prisma**             | Database translator/ORM     | Lets TypeScript interact with PostgreSQL                     |
+| **Migration**          | Database change history     | Safely changes database structure                            |
+| **Authentication**     | Identity checker            | Determines who the user is                                   |
+| **OTP**                | Temporary verification code | Verifies a phone number                                      |
+| **Checkout Engine**    | Order calculator/processor  | Creates and processes orders                                 |
+| **Multi-vendor**       | Multiple sellers            | Supports orders involving different vendors                  |
+| **State Machine**      | Order-status controller     | Controls valid order stages                                  |
+| **COD**                | Cash payment                | Customer pays on delivery                                    |
+| **WebSocket**          | Live connection             | Sends information instantly                                  |
+| **Supabase Realtime**  | Real-time service           | Pushes updates without refreshing                            |
+| **Sound notification** | Alert                       | Tells vendor immediately about a new order                   |

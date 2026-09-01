@@ -1,0 +1,57 @@
+                       👤 CUSTOMER
+                            │
+                            ▼
+                     ┌─────────────┐
+                     │   Next.js   │
+                     │  App Router │
+                     └──────┬──────┘
+                            │
+              ┌─────────────┼──────────────┐
+              │             │              │
+              ▼             ▼              ▼
+          TypeScript     Tailwind       Shadcn
+              │             │              │
+              │             └──────┬───────┘
+              │                    ▼
+              │              User Interface
+              │
+              ▼
+       Authentication
+       Supabase Auth
+          / Auth.js
+              │
+              ▼
+           Prisma
+              │
+              ▼
+        ┌─────────────┐
+        │ PostgreSQL  │
+        │  Supabase   │
+        └──────┬──────┘
+               │
+               ▼
+        ┌──────────────┐
+        │ Order Engine │
+        └──────┬───────┘
+               │
+        ┌──────┴───────┐
+        ▼              ▼
+   Calculations    State Machine
+   Subtotal        Pending
+   Delivery        Confirmed
+   Total            Preparing
+                    Ready
+                    Delivered
+               │
+               ▼
+       Supabase Realtime
+          / WebSockets
+               │
+        ┌──────┴──────────┐
+        ▼                 ▼
+  🏪 Vendor          👤 Customer
+   Dashboard          Tracking
+      🔔                  │
+   New Order              │
+                          ▼
+                    Order Updates

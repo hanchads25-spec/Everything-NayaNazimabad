@@ -1,0 +1,10 @@
+You are an expert full-stack developer building "Everything Naya Nazimabad".
+Tech Stack: Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Supabase (PostgreSQL), and Prisma ORM.
+
+Rules:
+1. Use Next.js 14 App Router standards (Server Components by default, 'use client' only when needed).
+2. Write modular, highly maintainable TypeScript code.
+3. Use Tailwind CSS and shadcn/ui components for styling.
+4. Always handle Cash on Delivery (COD) workflows for orders without payment gateway redirects.
+5. All database operations must interact with Supabase using `@supabase/ssr` or Prisma.
+6. Ensure responsive, mobile-first design targeting residents opening links via WhatsApp.

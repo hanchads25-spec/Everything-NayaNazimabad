@@ -1,0 +1,388 @@
+// Prisma schema for "Everything Naya Nazimabad" — Phase 1
+// Database: PostgreSQL (Supabase)
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  RESIDENT
+  VENDOR
+  SERVICE_PROVIDER
+}
+
+enum VendorType {
+  HOME_KITCHEN
+  RESTAURANT
+}
+
+enum CuisineType {
+  DESI
+  FAST_FOOD
+  CHINESE
+  BAKED_GOODS
+  TIFFIN
+  OTHER
+}
+
+enum ScheduleType {
+  PERMANENT
+  RECURRING_WEEKLY
+  SPECIFIC_DATE
+}
+
+enum PaymentMethod {
+  COD // Cash on Delivery — only method supported in Phase 1
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+// Residential blocks covered by Naya Nazimabad, Block A through Block N
+enum Block {
+  A
+  B
+  C
+  D
+  E
+  F
+  G
+  H
+  I
+  J
+  K
+  L
+  M
+  N
+}
+
+enum ListingCategory {
+  SECONDHAND
+  BOOKS
+  GADGETS
+  FURNITURE
+  CLOTHING
+  OTHER
+}
+
+enum ListingStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum TransactionType {
+  BUY_NOW
+  OFFER
+}
+
+enum TransactionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  NEW_MESSAGE
+  NEW_OFFER
+  BUY_NOW_REQUEST
+  OFFER_ACCEPTED
+  OFFER_REJECTED
+  TRANSACTION_COMPLETED
+}
+
+enum EmergencyCategory {
+  POLICE
+  AMBULANCE
+  FIRE_BRIGADE
+  SECURITY
+  ELECTRICIAN
+  PLUMBER
+  GAS
+  HOSPITAL
+  OTHER
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?  @unique
+  phone        String   @unique
+  passwordHash String?
+  role         Role     @default(RESIDENT)
+  block        Block?
+  houseNumber  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A user with role VENDOR can own one or more Kitchens (home kitchen / restaurant)
+  kitchens            Kitchen[]
+  foodOrders          FoodOrder[]           @relation("FoodOrderBuyer")
+  marketplaceListings MarketplaceListing[]
+
+  // In-app marketplace messaging & transactions (no external redirects, e.g. WhatsApp)
+  conversationsAsBuyer  Conversation[]           @relation("BuyerConversations")
+  conversationsAsSeller Conversation[]           @relation("SellerConversations")
+  sentMessages          Message[]                @relation("SentMessages")
+  transactionsAsBuyer   MarketplaceTransaction[] @relation("BuyerTransactions")
+  transactionsAsSeller  MarketplaceTransaction[] @relation("SellerTransactions")
+  notifications         Notification[]
+
+  @@index([role])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Food & Home Kitchens — hybrid availability engine
+//
+// A Kitchen (home kitchen or restaurant) lists MenuItems that can be toggled
+// on/off manually (isManualActive) and/or scheduled (permanent, a weekly
+// recurrence of specific days, or a one-off specific date + time window) —
+// e.g. a "midnight deals" item only active 00:00-04:00, or a Friday-only
+// biryani special. FoodOrder captures the checkout as a JSON snapshot of the
+// items ordered, so menu edits later don't retroactively change past orders.
+// ---------------------------------------------------------------------------
+
+model Kitchen {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  vendorType  VendorType
+  block       String
+  logoUrl     String?
+  isOpen      Boolean    @default(true)
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  menuItems  MenuItem[]
+  foodOrders FoodOrder[]
+
+  @@index([ownerId])
+  @@index([vendorType])
+  @@map("kitchens")
+}
+
+model MenuItem {
+  id          String      @id @default(cuid())
+  kitchenId   String
+  kitchen     Kitchen     @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  price       Float
+  cuisine     CuisineType
+  imageUrl    String?
+
+  // Manual on/off switch — always respected even if a schedule would allow it.
+  isManualActive Boolean      @default(true)
+  scheduleType   ScheduleType @default(PERMANENT)
+  activeDays     String[]     @default([]) // e.g. ["MON", "TUE"] for RECURRING_WEEKLY
+  specificDate   DateTime? // for SPECIFIC_DATE one-off specials
+  startTime      String? // e.g. "00:00" — daily active window start
+  endTime        String? // e.g. "04:00" — daily active window end
+  stockQty       Int? // null = unlimited/not tracked
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kitchenId])
+  @@index([cuisine])
+  @@map("menu_items")
+}
+
+model FoodOrder {
+  id              String   @id @default(cuid())
+  buyerId         String
+  buyer           User     @relation("FoodOrderBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  kitchenId       String
+  kitchen         Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  items           Json // snapshot of ordered items: [{ menuItemId, title, price, quantity }, ...]
+  totalAmount     Float
+  status          String   @default("PENDING")
+  deliveryAddress String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([buyerId])
+  @@index([kitchenId])
+  @@index([status])
+  @@map("food_orders")
+}
+
+// OLX-style secondhand marketplace for residents (books, gadgets, furniture, etc.)
+model MarketplaceListing {
+  id          String          @id @default(cuid())
+  sellerId    String
+  seller      User            @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  category    ListingCategory
+  price       Decimal         @db.Decimal(10, 2)
+  status      ListingStatus   @default(AVAILABLE)
+  block       Block
+  imageUrls   String[]        @default([])
+  images      ListingImage[]  // <--- ADD THIS RELATION LINE
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  conversations Conversation[]
+  transactions  MarketplaceTransaction[]
+
+  @@index([category])
+  @@index([status])
+  @@index([sellerId])
+  @@map("marketplace_listings")
+}
+
+model MosqueTiming {
+  id         String   @id @default(cuid())
+  mosqueName String
+  block      Block?
+  fajr       String
+  dhuhr      String
+  asr        String
+  maghrib    String
+  isha       String
+  jummah     String? // Friday prayer timing, if applicable
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@map("mosque_timings")
+}
+
+model EmergencyContact {
+  id        String            @id @default(cuid())
+  name      String
+  category  EmergencyCategory
+  phone     String
+  block     Block? // null implies the contact serves the whole society
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([category])
+  @@map("emergency_contacts")
+}
+model ListingImage {
+  id        String             @id @default(cuid())
+  url       String
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@map("listing_images")
+}
+
+// ---------------------------------------------------------------------------
+// In-app marketplace messaging & transactions
+//
+// All buyer <-> seller interaction happens inside the app (no WhatsApp/Facebook
+// redirects). A Conversation is scoped to one listing + one buyer, and is
+// shared by the chat thread and any Buy Now / Make Offer transactions raised
+// within it.
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User     @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    User     @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages     Message[]
+  transactions MarketplaceTransaction[]
+
+  // One conversation per (listing, buyer) pair — reopening chat reuses it.
+  @@unique([listingId, buyerId])
+  @@index([sellerId])
+  @@index([buyerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// A Buy Now checkout or a Make Offer proposal raised from a listing.
+model MarketplaceTransaction {
+  id             String             @id @default(cuid())
+  listingId      String
+  listing        MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  buyerId        String
+  buyer          User               @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId       String
+  seller         User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
+  type           TransactionType
+  offerAmount    Decimal?           @db.Decimal(10, 2) // set when type = OFFER
+  status         TransactionStatus  @default(PENDING)
+
+  // Cash-on-delivery details, collected for Buy Now (and once an Offer is accepted)
+  deliveryBlock   Block?
+  deliveryAddress String?
+  contactPhone    String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("marketplace_transactions")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String? // in-app path to deep link into, e.g. /messages/{conversationId}
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
