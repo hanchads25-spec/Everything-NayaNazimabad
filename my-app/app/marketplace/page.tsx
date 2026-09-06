@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { PageHeader } from "@/components/layout/page-header";
 import { ListingCard } from "@/components/marketplace/listing-card";
