@@ -1,28 +1,16 @@
-import Link from "next/link";
-
 import { PageHeader } from "@/components/layout/page-header";
 import { CreateKitchenForm } from "@/components/kitchens/manage/create-kitchen-form";
 import { ManageKitchen } from "@/components/kitchens/manage/manage-kitchen";
-import { Button } from "@/components/ui/button";
+import { VendorPendingScreen } from "@/components/vendor/vendor-pending-screen";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
+import { requireVendorAccess } from "@/lib/vendor-auth";
 
 export default async function ManageKitchensPage() {
-  const currentUser = await getCurrentUser();
-
-  if (!currentUser) {
-    return (
-      <div className="flex min-h-screen flex-col bg-muted/30">
-        <PageHeader title="Manage Kitchen" backHref="/kitchens" />
-        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
-          <p className="text-sm text-muted-foreground">Sign in to manage your kitchen listing.</p>
-          <Button nativeButton={false} render={<Link href="/login?next=/kitchens/manage" />}>
-            Continue as a demo resident
-          </Button>
-        </main>
-      </div>
-    );
+  const gate = await requireVendorAccess("/auth/register-vendor?category=HOME_KITCHEN");
+  if (!gate.approved) {
+    return <VendorPendingScreen title="Manage Kitchen" backHref="/kitchens" />;
   }
+  const currentUser = gate.user;
 
   const kitchen = await prisma.kitchen.findFirst({
     where: { ownerId: currentUser.id },

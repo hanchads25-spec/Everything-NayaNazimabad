@@ -29,10 +29,12 @@ export function BuyNowDialog({
   listingId,
   open,
   onOpenChange,
+  isSignedIn,
 }: {
   listingId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isSignedIn: boolean;
 }) {
   const router = useRouter();
   const [deliveryBlock, setDeliveryBlock] = useState<string>("");
@@ -49,6 +51,7 @@ export function BuyNowDialog({
       deliveryAddress: String(formData.get("deliveryAddress") ?? ""),
       contactPhone: String(formData.get("contactPhone") ?? ""),
       notes: String(formData.get("notes") ?? ""),
+      guestName: String(formData.get("guestName") ?? ""),
     };
 
     try {
@@ -60,10 +63,15 @@ export function BuyNowDialog({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Failed to send request");
 
-      toast.success("Buy Now request sent — the seller has been notified.");
       onOpenChange(false);
-      router.push(`/messages/${data.conversationId}`);
-      router.refresh();
+      if (data.conversationId) {
+        toast.success("Buy Now request sent — the seller has been notified.");
+        router.push(`/messages/${data.conversationId}`);
+        router.refresh();
+      } else {
+        toast.success("Order placed! The seller will contact you to confirm delivery.");
+        router.refresh();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Something went wrong");
     } finally {
@@ -78,11 +86,20 @@ export function BuyNowDialog({
           <DialogHeader>
             <DialogTitle>Buy Now — Cash on Delivery</DialogTitle>
             <DialogDescription>
-              Confirm your delivery details. The seller will review and confirm in chat.
+              {isSignedIn
+                ? "Confirm your delivery details. The seller will review and confirm in chat."
+                : "Confirm your details as a guest — the seller will contact you directly to confirm."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3">
+            {!isSignedIn && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="guestName">Your name</Label>
+                <Input id="guestName" name="guestName" placeholder="e.g. Ahmed Raza" required />
+              </div>
+            )}
+
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="deliveryBlock">Block</Label>
               <Select

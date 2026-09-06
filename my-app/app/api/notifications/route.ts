@@ -1,26 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { requireCurrentUser, UnauthenticatedError } from "@/lib/session";
+import { getSessionUserId, requireCurrentUser, UnauthenticatedError } from "@/lib/session";
 
+/**
+ * GET /api/notifications — fetched once on mount by <NotificationBell> to
+ * read `unreadCount` for the badge (the full list is rendered server-side on
+ * the /notifications page instead, via a direct Prisma call). No polling —
+ * this route now sees exactly one request per page load.
+ *
+ * Guests (no session cookie) short-circuit before touching the database.
+ * Signed-in users hit a single lean `count`, backed by the
+ * `[userId, isRead]` index — no `findMany` of full rows.
+ */
 export async function GET() {
   try {
-    const currentUser = await requireCurrentUser();
-
-    const [notifications, unreadCount] = await Promise.all([
-      prisma.notification.findMany({
-        where: { userId: currentUser.id },
-        orderBy: { createdAt: "desc" },
-        take: 30,
-      }),
-      prisma.notification.count({ where: { userId: currentUser.id, isRead: false } }),
-    ]);
-
-    return NextResponse.json({ notifications, unreadCount });
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      return NextResponse.json({ notifications: [], unreadCount: 0 });
+    const userId = await getSessionUserId();
+    if (!userId) {
+      return NextResponse.json({ unreadCount: 0 });
     }
+
+    const unreadCount = await prisma.notification.count({
+      where: { userId, isRead: false },
+    });
+
+    return NextResponse.json({ unreadCount });
+  } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }

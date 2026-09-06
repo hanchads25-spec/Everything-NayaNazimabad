@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CuisineType, ScheduleType } from "@prisma/client";
 
+import { parseJsonArrayField, parseRequestBody } from "@/lib/api/parse-body";
 import { WEEKDAYS } from "@/lib/kitchens/availability";
 import { serializeMenuItem } from "@/lib/kitchens/serialize";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser, UnauthenticatedError } from "@/lib/session";
+import { isStorageConfigured, uploadPublicFile } from "@/lib/supabase/admin";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: kitchenId } = await params;
@@ -41,13 +43,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "You don't manage this kitchen." }, { status: 403 });
     }
 
-    const body = await request.json().catch(() => null);
+    const body = await parseRequestBody(request);
 
     const title = typeof body?.title === "string" ? body.title.trim() : "";
     const description = typeof body?.description === "string" ? body.description.trim() : undefined;
     const price = Number(body?.price);
     const cuisine = body?.cuisine as CuisineType;
-    const imageUrl = typeof body?.imageUrl === "string" && body.imageUrl.trim() ? body.imageUrl.trim() : undefined;
+    let imageUrl =
+      typeof body?.imageUrl === "string" && body.imageUrl.trim() ? body.imageUrl.trim() : undefined;
 
     if (!title) return NextResponse.json({ error: "Dish name is required" }, { status: 400 });
     if (!Number.isFinite(price) || price <= 0) {
@@ -57,11 +60,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Select a cuisine type" }, { status: 400 });
     }
 
+    const imageFile = body?.image;
+    if (imageFile instanceof File && imageFile.size > 0) {
+      if (isStorageConfigured()) {
+        try {
+          imageUrl = await uploadPublicFile("kitchen-images", `kitchen-${kitchen.ownerId}/menu`, imageFile);
+        } catch (error) {
+          console.error("[menu-items] image upload failed", error);
+        }
+      } else {
+        console.warn("[menu-items] SUPABASE_SERVICE_ROLE_KEY not set — creating dish without a photo.");
+      }
+    }
+
     const scheduleType: ScheduleType =
-      body?.scheduleType && body.scheduleType in ScheduleType ? body.scheduleType : ScheduleType.PERMANENT;
-    const activeDays: string[] = Array.isArray(body?.activeDays)
-      ? body.activeDays.filter((day: unknown): day is string => typeof day === "string" && (WEEKDAYS as readonly string[]).includes(day))
-      : [];
+      typeof body?.scheduleType === "string" && body.scheduleType in ScheduleType
+        ? (body.scheduleType as ScheduleType)
+        : ScheduleType.PERMANENT;
+    const activeDays: string[] = parseJsonArrayField(body?.activeDays).filter(
+      (day): day is string => typeof day === "string" && (WEEKDAYS as readonly string[]).includes(day)
+    );
     const specificDate = typeof body?.specificDate === "string" && body.specificDate ? new Date(body.specificDate) : undefined;
     const startTime = typeof body?.startTime === "string" && body.startTime ? body.startTime : undefined;
     const endTime = typeof body?.endTime === "string" && body.endTime ? body.endTime : undefined;

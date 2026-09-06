@@ -23,6 +23,12 @@ export const VENDOR_TYPE_LABELS: Record<string, string> = {
   RESTAURANT: "Restaurant",
 };
 
+export const VENDOR_CATEGORY_LABELS: Record<string, string> = {
+  HOME_KITCHEN: "Home Kitchen",
+  RESTAURANT: "Restaurant",
+  MARKETPLACE_SELLER: "Marketplace Seller",
+};
+
 export const CUISINE_LABELS: Record<string, string> = {
   DESI: "Desi",
   FAST_FOOD: "Fast Food",
@@ -44,5 +50,13 @@ export const FOOD_ORDER_STATUS_LABELS: Record<string, string> = {
   PREPARING: "Preparing",
   OUT_FOR_DELIVERY: "Out for delivery",
   DELIVERED: "Delivered",
+  CANCELLED: "Cancelled",
+};
+
+export const TRANSACTION_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pending",
+  ACCEPTED: "Accepted",
+  REJECTED: "Rejected",
+  COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };

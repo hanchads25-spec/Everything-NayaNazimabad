@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { SESSION_COOKIE_NAME, setSessionCookie } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -17,13 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ user: { id: user.id, name: user.name } });
-  response.cookies.set(SESSION_COOKIE_NAME, user.id, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
-  return response;
+  return setSessionCookie(response, user.id);
 }
 
 export async function DELETE() {

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CUISINE_LABELS, formatPkr } from "@/lib/format";
@@ -75,11 +76,6 @@ export function KitchenMenu({
   }
 
   function openCheckout() {
-    if (!isSignedIn) {
-      toast.error("Continue as a demo resident first.");
-      router.push(`/login?next=/kitchens/${kitchenId}`);
-      return;
-    }
     setCheckoutOpen(true);
   }
 
@@ -98,6 +94,8 @@ export function KitchenMenu({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           deliveryAddress: String(formData.get("deliveryAddress") ?? ""),
+          guestName: String(formData.get("guestName") ?? ""),
+          guestPhone: String(formData.get("guestPhone") ?? ""),
           items: cartLines.map(([menuItemId, quantity]) => ({ menuItemId, quantity })),
         }),
       });
@@ -218,7 +216,11 @@ export function KitchenMenu({
           <form onSubmit={handleCheckout} className="flex flex-col gap-4">
             <DialogHeader>
               <DialogTitle>Cash on Delivery checkout</DialogTitle>
-              <DialogDescription>Confirm your delivery address to place this order.</DialogDescription>
+              <DialogDescription>
+                {isSignedIn
+                  ? "Confirm your delivery address to place this order."
+                  : "Checking out as a guest — the kitchen will contact you to confirm."}
+              </DialogDescription>
             </DialogHeader>
 
             <div className="flex flex-col gap-2">
@@ -239,6 +241,19 @@ export function KitchenMenu({
                 <span>{formatPkr(cartTotal)}</span>
               </div>
             </div>
+
+            {!isSignedIn && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="guestName">Your name</Label>
+                  <Input id="guestName" name="guestName" placeholder="e.g. Ahmed Raza" required />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="guestPhone">Phone number</Label>
+                  <Input id="guestPhone" name="guestPhone" type="tel" placeholder="03xx xxxxxxx" required />
+                </div>
+              </>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="deliveryAddress">Delivery address</Label>

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CuisineType, VendorType } from "@prisma/client";
 
+import { parseRequestBody } from "@/lib/api/parse-body";
 import { getPakistanNow } from "@/lib/kitchens/availability";
 import { serializeKitchenSummary } from "@/lib/kitchens/serialize";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser, UnauthenticatedError } from "@/lib/session";
+import { isStorageConfigured, uploadPublicFile } from "@/lib/supabase/admin";
 
 /**
  * GET /api/kitchens — consumer discovery feed.
@@ -67,12 +69,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const currentUser = await requireCurrentUser();
-    const body = await request.json().catch(() => null);
+    const body = await parseRequestBody(request);
 
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const description = typeof body?.description === "string" ? body.description.trim() : undefined;
     const block = typeof body?.block === "string" ? body.block.trim() : "";
-    const logoUrl = typeof body?.logoUrl === "string" && body.logoUrl.trim() ? body.logoUrl.trim() : undefined;
+    let logoUrl =
+      typeof body?.logoUrl === "string" && body.logoUrl.trim() ? body.logoUrl.trim() : undefined;
     const vendorType = body?.vendorType === "RESTAURANT" ? VendorType.RESTAURANT : VendorType.HOME_KITCHEN;
 
     if (!name) {
@@ -80,6 +83,19 @@ export async function POST(request: NextRequest) {
     }
     if (!block) {
       return NextResponse.json({ error: "Block is required" }, { status: 400 });
+    }
+
+    const logoFile = body?.logo;
+    if (logoFile instanceof File && logoFile.size > 0) {
+      if (isStorageConfigured()) {
+        try {
+          logoUrl = await uploadPublicFile("kitchen-images", `kitchen-${currentUser.id}/logo`, logoFile);
+        } catch (error) {
+          console.error("[kitchens] logo upload failed", error);
+        }
+      } else {
+        console.warn("[kitchens] SUPABASE_SERVICE_ROLE_KEY not set — creating kitchen without a logo.");
+      }
     }
 
     const kitchen = await prisma.kitchen.create({

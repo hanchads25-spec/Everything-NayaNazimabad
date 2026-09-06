@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isMenuItemActive } from "@/lib/kitchens/availability";
+import { createNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { requireCurrentUser, UnauthenticatedError } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 
 interface CartLine {
   menuItemId: string;
@@ -15,12 +16,16 @@ interface CartLine {
  * so later menu edits never retroactively change a past order, validates
  * every line is currently orderable via the availability engine, and
  * decrements tracked stock.
+ *
+ * Guest-first browsing: no session required — a guest supplies
+ * guestName/guestPhone directly in the checkout modal and buyerId stays null.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: kitchenId } = await params;
 
   try {
-    const currentUser = await requireCurrentUser();
+    const currentUser = await getCurrentUser();
+    const isGuest = !currentUser;
 
     const kitchen = await prisma.kitchen.findUnique({ where: { id: kitchenId } });
     if (!kitchen) {
@@ -32,6 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const body = await request.json().catch(() => null);
     const deliveryAddress = typeof body?.deliveryAddress === "string" ? body.deliveryAddress.trim() : "";
+    const guestName = typeof body?.guestName === "string" ? body.guestName.trim() : "";
+    const guestPhone = typeof body?.guestPhone === "string" ? body.guestPhone.trim() : "";
     const cartLines: CartLine[] = Array.isArray(body?.items)
       ? body.items
           .map((line: unknown) => {
@@ -46,6 +53,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!deliveryAddress) {
       return NextResponse.json({ error: "Delivery address is required" }, { status: 400 });
+    }
+    if (isGuest && (!guestName || !guestPhone)) {
+      return NextResponse.json({ error: "Your name and phone number are required" }, { status: 400 });
     }
     if (cartLines.length === 0) {
       return NextResponse.json({ error: "Your order is empty" }, { status: 400 });
@@ -86,10 +96,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       totalAmount += menuItem.price * line.quantity;
     }
 
+    const buyerLabel = currentUser?.name ?? guestName;
+
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.foodOrder.create({
         data: {
-          buyerId: currentUser.id,
+          buyerId: currentUser?.id,
+          guestName: isGuest ? guestName : undefined,
+          guestPhone: isGuest ? guestPhone : undefined,
           kitchenId,
           items: orderItems,
           totalAmount,
@@ -108,14 +122,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
 
+      await createNotification({
+        userId: kitchen.ownerId,
+        type: "BUY_NOW_REQUEST",
+        title: `${buyerLabel} placed an order at ${kitchen.name}`,
+        body: isGuest
+          ? `Cash on Delivery order from a guest — contact them at ${guestPhone} to confirm.`
+          : "Cash on Delivery order — check Manage My Kitchen for details.",
+        link: `/kitchens/manage`,
+        client: tx,
+      });
+
       return created;
     });
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {
-    if (error instanceof UnauthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
-    }
     console.error(error);
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }

@@ -115,9 +115,10 @@ export async function PATCH(
         });
       }
 
+      // A null buyerId means the buyer was a guest with no account to notify.
       const notifyUserId = isSeller ? transaction.buyerId : transaction.sellerId;
       const copy = NOTIFICATION_COPY[nextStatus];
-      if (copy) {
+      if (copy && notifyUserId) {
         await createNotification({
           userId: notifyUserId,
           type: copy.type,

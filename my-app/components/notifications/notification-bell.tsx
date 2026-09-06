@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Single fetch on mount — no interval/polling. The badge reflects the
+  // count as of page load; it's refreshed by a full page nav/refresh
+  // (e.g. after visiting /notifications), not by a background timer.
   useEffect(() => {
     let isMounted = true;
 
@@ -18,16 +21,14 @@ export function NotificationBell() {
         const data = await response.json();
         if (isMounted) setUnreadCount(data.unreadCount ?? 0);
       } catch {
-        // Ignore — the badge just won't update this cycle.
+        // Ignore — the badge just won't update.
       }
     }
 
     loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 30000);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, []);
 

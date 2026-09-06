@@ -18,11 +18,20 @@ enum Role {
   RESIDENT
   VENDOR
   SERVICE_PROVIDER
+  ADMIN
 }
 
 enum VendorType {
   HOME_KITCHEN
   RESTAURANT
+}
+
+// What someone registered as via /auth/register-vendor — broader than
+// VendorType since it also covers marketplace-only sellers (no Kitchen).
+enum VendorCategory {
+  HOME_KITCHEN
+  RESTAURANT
+  MARKETPLACE_SELLER
 }
 
 enum CuisineType {
@@ -106,6 +115,8 @@ enum NotificationType {
   OFFER_ACCEPTED
   OFFER_REJECTED
   TRANSACTION_COMPLETED
+  VENDOR_APPROVED
+  VENDOR_REJECTED
 }
 
 enum EmergencyCategory {
@@ -135,6 +146,16 @@ model User {
   houseNumber  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // Vendor onboarding & verification — filled in via /auth/register-vendor.
+  // `businessName` doubling as "has this person applied to be a vendor" is
+  // intentional: it lets the approval gate distinguish "never applied" from
+  // "applied, pending review" without a separate status enum.
+  businessName   String?
+  cnicNumber     String?
+  vendorCategory VendorCategory?
+  cnicImageUrl   String? // storage path in the private `vendor-documents` bucket
+  isApproved     Boolean         @default(false)
 
   // A user with role VENDOR can own one or more Kitchens (home kitchen / restaurant)
   kitchens            Kitchen[]
@@ -214,8 +235,12 @@ model MenuItem {
 
 model FoodOrder {
   id              String   @id @default(cuid())
-  buyerId         String
-  buyer           User     @relation("FoodOrderBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  // Guest-first checkout: buyerId is null for guest orders (guestName /
+  // guestPhone capture who to contact instead). Signed-in orders keep buyerId.
+  buyerId         String?
+  buyer           User?    @relation("FoodOrderBuyer", fields: [buyerId], references: [id], onDelete: SetNull)
+  guestName       String?
+  guestPhone      String?
   kitchenId       String
   kitchen         Kitchen  @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
   items           Json // snapshot of ordered items: [{ menuItemId, title, price, quantity }, ...]
@@ -347,8 +372,12 @@ model MarketplaceTransaction {
   listing        MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   conversationId String?
   conversation   Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  buyerId        String
-  buyer          User               @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  // Guest-first checkout: buyerId is null for guest Buy Now orders (no
+  // conversation either, since guests can't chat). guestName + the existing
+  // contactPhone/deliveryAddress fields capture who to contact instead.
+  buyerId        String?
+  buyer          User?              @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: SetNull)
+  guestName      String?
   sellerId       String
   seller         User               @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
   type           TransactionType
@@ -382,7 +411,12 @@ model Notification {
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
 
-  @@index([userId])
-  @@index([isRead])
+  // Composite indexes (both leading with userId, the only column every query
+  // filters on) cover the two real access patterns: the ordered inbox list
+  // (userId, createdAt) and the unread-count poll (userId, isRead). A plain
+  // userId-only index is redundant once these exist — Postgres can still use
+  // either composite's leading column for userId-only lookups.
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
   @@map("notifications")
 }

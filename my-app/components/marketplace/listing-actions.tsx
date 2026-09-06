@@ -82,17 +82,24 @@ export function ListingActions({
           <Tag className="size-4" />
           Make Offer
         </Button>
-        <Button
-          className="flex-1"
-          disabled={isSold}
-          onClick={() => requireSignIn() && setBuyNowOpen(true)}
-        >
+        <Button className="flex-1" disabled={isSold} onClick={() => setBuyNowOpen(true)}>
           <ShoppingBag className="size-4" />
           Buy Now
         </Button>
       </div>
 
-      <BuyNowDialog listingId={listingId} open={buyNowOpen} onOpenChange={setBuyNowOpen} />
+      {!isSignedIn && (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Buy Now works as a guest — Make Offer &amp; Chat need you to continue as a demo resident.
+        </p>
+      )}
+
+      <BuyNowDialog
+        listingId={listingId}
+        open={buyNowOpen}
+        onOpenChange={setBuyNowOpen}
+        isSignedIn={isSignedIn}
+      />
       <MakeOfferDialog listingId={listingId} open={offerOpen} onOpenChange={setOfferOpen} />
     </div>
   );

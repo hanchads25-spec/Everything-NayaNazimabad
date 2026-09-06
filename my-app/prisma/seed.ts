@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, ListingCategory, Block } from "@prisma/client";
+import { PrismaClient, ListingCategory, Block, Role } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -7,7 +7,8 @@ const prisma = new PrismaClient({ adapter });
 
 /**
  * Demo users for the mock "Continue as" session picker (no real auth yet).
- * `ayesha` and `sana` sell items on the marketplace; `bilal` is a buyer.
+ * `ayesha` and `sana` sell items on the marketplace; `bilal` is a buyer;
+ * `admin` can approve pending vendors at /admin/vendors.
  */
 const demoUsers = [
   {
@@ -31,20 +32,35 @@ const demoUsers = [
     block: Block.C,
     houseNumber: "C-21",
   },
+  {
+    key: "admin",
+    name: "Naya Nazimabad Admin",
+    phone: "+92 300 0000001",
+    block: null,
+    houseNumber: null,
+    role: Role.ADMIN,
+  },
 ] as const;
 
 async function main() {
   const users = new Map<string, string>();
 
   for (const demoUser of demoUsers) {
+    const role = "role" in demoUser ? demoUser.role : undefined;
     const user = await prisma.user.upsert({
       where: { phone: demoUser.phone },
-      update: { name: demoUser.name, block: demoUser.block, houseNumber: demoUser.houseNumber },
+      update: {
+        name: demoUser.name,
+        block: demoUser.block,
+        houseNumber: demoUser.houseNumber,
+        ...(role ? { role } : {}),
+      },
       create: {
         name: demoUser.name,
         phone: demoUser.phone,
         block: demoUser.block,
         houseNumber: demoUser.houseNumber,
+        ...(role ? { role } : {}),
       },
     });
     users.set(demoUser.key, user.id);

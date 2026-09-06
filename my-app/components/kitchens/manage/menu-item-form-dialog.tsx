@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ImageUploadField } from "@/components/ui/image-upload-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -86,20 +87,18 @@ function MenuItemFormBody({
     event.preventDefault();
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
-
-    const payload: Record<string, unknown> = {
-      title: String(formData.get("title") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      price: Number(formData.get("price")),
-      cuisine,
-      imageUrl: String(formData.get("imageUrl") ?? ""),
-      scheduleType,
-      activeDays: scheduleType === "RECURRING_WEEKLY" ? activeDays : [],
-      specificDate: scheduleType === "SPECIFIC_DATE" ? String(formData.get("specificDate") ?? "") || null : null,
-      startTime: scheduleType !== "PERMANENT" ? String(formData.get("startTime") ?? "") || null : null,
-      endTime: scheduleType !== "PERMANENT" ? String(formData.get("endTime") ?? "") || null : null,
-      stockQty: trackStock ? Number(formData.get("stockQty") ?? 0) : null,
-    };
+    formData.set("cuisine", cuisine);
+    formData.set("scheduleType", scheduleType);
+    formData.set("activeDays", JSON.stringify(scheduleType === "RECURRING_WEEKLY" ? activeDays : []));
+    formData.set(
+      "specificDate",
+      scheduleType === "SPECIFIC_DATE" ? String(formData.get("specificDate") ?? "") : ""
+    );
+    formData.set("startTime", scheduleType !== "PERMANENT" ? String(formData.get("startTime") ?? "") : "");
+    formData.set("endTime", scheduleType !== "PERMANENT" ? String(formData.get("endTime") ?? "") : "");
+    formData.set("stockQty", trackStock ? String(formData.get("stockQty") ?? "0") : "");
+    // Existing photo URL, kept as a fallback when no new file is chosen (edit case).
+    formData.set("imageUrl", menuItem?.imageUrl ?? "");
 
     try {
       const url = isEditing
@@ -107,8 +106,7 @@ function MenuItemFormBody({
         : `/api/kitchens/${kitchenId}/menu-items`;
       const response = await fetch(url, {
         method: isEditing ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Failed to save dish");
@@ -166,10 +164,7 @@ function MenuItemFormBody({
           <Textarea id="description" name="description" defaultValue={menuItem?.description ?? ""} />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="imageUrl">Image URL (optional)</Label>
-          <Input id="imageUrl" name="imageUrl" defaultValue={menuItem?.imageUrl ?? ""} placeholder="https://…" />
-        </div>
+        <ImageUploadField name="image" label="Dish photo (optional)" existingImageUrl={menuItem?.imageUrl} />
 
         <div className="flex flex-col gap-1.5">
           <Label>Schedule</Label>

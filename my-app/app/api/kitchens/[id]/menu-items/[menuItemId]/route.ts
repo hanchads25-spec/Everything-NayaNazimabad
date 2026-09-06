@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CuisineType, ScheduleType } from "@prisma/client";
 
+import { parseJsonArrayField, parseRequestBody } from "@/lib/api/parse-body";
 import { WEEKDAYS } from "@/lib/kitchens/availability";
 import { serializeMenuItem } from "@/lib/kitchens/serialize";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser, UnauthenticatedError } from "@/lib/session";
+import { isStorageConfigured, uploadPublicFile } from "@/lib/supabase/admin";
 
 async function getOwnedMenuItemOr404(kitchenId: string, menuItemId: string, userId: string) {
   const menuItem = await prisma.menuItem.findUnique({
@@ -34,10 +36,10 @@ export async function PATCH(
 
   try {
     const currentUser = await requireCurrentUser();
-    const { error } = await getOwnedMenuItemOr404(kitchenId, menuItemId, currentUser.id);
+    const { error, menuItem: existingItem } = await getOwnedMenuItemOr404(kitchenId, menuItemId, currentUser.id);
     if (error) return error;
 
-    const body = await request.json().catch(() => null);
+    const body = await parseRequestBody(request);
     const data: Record<string, unknown> = {};
 
     if (typeof body?.isManualActive === "boolean") data.isManualActive = body.isManualActive;
@@ -47,19 +49,38 @@ export async function PATCH(
       const price = Number(body.price);
       if (Number.isFinite(price) && price > 0) data.price = price;
     }
-    if (body?.cuisine && body.cuisine in CuisineType) data.cuisine = body.cuisine as CuisineType;
-    if (typeof body?.imageUrl === "string") data.imageUrl = body.imageUrl.trim() || null;
+    if (typeof body?.cuisine === "string" && body.cuisine in CuisineType) data.cuisine = body.cuisine as CuisineType;
 
-    if (body?.scheduleType && body.scheduleType in ScheduleType) {
+    const imageFile = body?.image;
+    if (imageFile instanceof File && imageFile.size > 0) {
+      if (isStorageConfigured()) {
+        try {
+          data.imageUrl = await uploadPublicFile(
+            "kitchen-images",
+            `kitchen-${existingItem?.kitchen.ownerId}/menu`,
+            imageFile
+          );
+        } catch (uploadError) {
+          console.error("[menu-items] image upload failed", uploadError);
+        }
+      } else {
+        console.warn("[menu-items] SUPABASE_SERVICE_ROLE_KEY not set — keeping the existing photo.");
+      }
+    } else if (typeof body?.imageUrl === "string") {
+      data.imageUrl = body.imageUrl.trim() || null;
+    }
+
+    if (typeof body?.scheduleType === "string" && body.scheduleType in ScheduleType) {
       data.scheduleType = body.scheduleType as ScheduleType;
     }
-    if (Array.isArray(body?.activeDays)) {
-      data.activeDays = body.activeDays.filter(
-        (day: unknown): day is string => typeof day === "string" && (WEEKDAYS as readonly string[]).includes(day)
+    if (body?.activeDays !== undefined) {
+      data.activeDays = parseJsonArrayField(body.activeDays).filter(
+        (day): day is string => typeof day === "string" && (WEEKDAYS as readonly string[]).includes(day)
       );
     }
     if (body?.specificDate !== undefined) {
-      data.specificDate = body.specificDate ? new Date(body.specificDate) : null;
+      data.specificDate =
+        typeof body.specificDate === "string" && body.specificDate ? new Date(body.specificDate) : null;
     }
     if (body?.startTime !== undefined) data.startTime = body.startTime || null;
     if (body?.endTime !== undefined) data.endTime = body.endTime || null;
